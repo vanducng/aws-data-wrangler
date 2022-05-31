@@ -49,6 +49,47 @@ def test_basic_scenario(timestream_database_and_table, pagination):
     assert df.shape == (3, 8)
 
 
+@pytest.mark.distributed
+@pytest.mark.parametrize("pagination", [None, {}, {"MaxItems": 3, "PageSize": 2}])
+def test_basic_scenario_distributed(timestream_database_and_table, pagination):
+    name = timestream_database_and_table
+    df = pd.DataFrame(
+        {
+            "time": [datetime.now(), datetime.now(), datetime.now()],
+            "dim0": ["foo", "boo", "bar"],
+            "dim1": [1, 2, 3],
+            "measure": [1.0, 1.1, 1.2],
+        }
+    )
+    rejected_records = wr.timestream.write(
+        df=df,
+        database=name,
+        table=name,
+        time_col="time",
+        measure_col="measure",
+        dimensions_cols=["dim0", "dim1"],
+    )
+    assert len(rejected_records) == 0
+    df = wr.timestream.query(
+        f"""
+        SELECT
+            1 as col_int,
+            try_cast(now() as time) as col_time,
+            TRUE as col_bool,
+            current_date as col_date,
+            'foo' as col_str,
+            measure_value::double,
+            measure_name,
+            time
+        FROM "{name}"."{name}"
+        ORDER BY time
+        DESC LIMIT 10
+        """,
+        pagination_config=pagination,
+    )
+    assert df.shape == (3, 8)
+
+
 def test_chunked_scenario(timestream_database_and_table):
     df = pd.DataFrame(
         {
