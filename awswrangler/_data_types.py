@@ -1,7 +1,6 @@
 """Internal (private) Data Types Module."""
 
 import datetime
-import importlib.util
 import logging
 import re
 import warnings
@@ -14,10 +13,6 @@ import pyarrow as pa
 import pyarrow.parquet
 
 from awswrangler import _utils, exceptions
-
-_oracledb_found = importlib.util.find_spec("oracledb")
-if _oracledb_found:
-    import oracledb  # pylint: disable=import-error
 
 _logger: logging.Logger = logging.getLogger(__name__)
 
@@ -728,38 +723,6 @@ def _cast_pandas_column(df: pd.DataFrame, col: str, current_type: str, desired_t
                 .astype(desired_type)
             )
     return df
-
-
-def handle_oracle_decimal(con: Any, cursor_description: Any) -> Dict[str, pa.DataType]:
-    """Determine if a given Oracle column is a decimal, not just a standard float value."""
-    dtype = {}
-    if isinstance(con, oracledb.Connection):
-        # Oracle stores DECIMAL as the NUMBER type
-        for row in cursor_description:
-            if row[1] == oracledb.DB_TYPE_NUMBER and row[5] > 0:
-                dtype[row[0]] = pa.decimal128(row[4], row[5])
-
-    _logger.debug("decimal dtypes: %s", dtype)
-    return dtype
-
-
-def convert_oracle_specific_objects(con: Any, col_values: List[Any]) -> List[Any]:
-    """Get the string representation of an Oracle LOB value."""
-    if isinstance(con, oracledb.Connection):
-        if any(isinstance(col_value, oracledb.LOB) for col_value in col_values):
-            col_values = [
-                col_value.read() if isinstance(col_value, oracledb.LOB) else col_value for col_value in col_values
-            ]
-
-    return col_values
-
-
-def convert_oracle_decimal_objects(con: Any, col_values: List[Any]) -> List[Any]:
-    """Convert float to decimal."""
-    if isinstance(con, oracledb.Connection):
-        col_values = [Decimal(repr(col_value)) if col_value is not None else col_value for col_value in col_values]
-
-    return col_values
 
 
 def database_types_from_pandas(

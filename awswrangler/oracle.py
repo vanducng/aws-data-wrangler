@@ -3,6 +3,7 @@
 import importlib.util
 import inspect
 import logging
+from decimal import Decimal
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, TypeVar, Union
 
 import boto3
@@ -424,3 +425,36 @@ def to_sql(
         con.rollback()
         _logger.error(ex)
         raise
+
+
+def detect_oracle_decimal_datatype(cursor: Any) -> Dict[str, pa.DataType]:
+    """Determine if a given Oracle column is a decimal, not just a standard float value."""
+    dtype = {}
+    _logger.debug("cursor type: %s", type(cursor))
+    if isinstance(cursor, oracledb.Cursor):
+        # Oracle stores DECIMAL as the NUMBER type
+        for row in cursor.description:
+            if row[1] == oracledb.DB_TYPE_NUMBER and row[5] > 0:
+                dtype[row[0]] = pa.decimal128(row[4], row[5])
+
+    _logger.debug("decimal dtypes: %s", dtype)
+    return dtype
+
+
+def handle_oracle_objects(
+    col_values: List[Any], col_name: str, dtype: Optional[Dict[str, pa.DataType]] = None
+) -> List[Any]:
+    """Get the string representation of an Oracle LOB value, and convert float to decimal."""
+    if any(isinstance(col_value, oracledb.LOB) for col_value in col_values):
+        col_values = [
+            col_value.read() if isinstance(col_value, oracledb.LOB) else col_value for col_value in col_values
+        ]
+
+    if dtype is not None:
+        if isinstance(dtype[col_name], pa.Decimal128Type):
+            _logger.debug("decimal_col_values:\n%s", col_values)
+            col_values = [
+                Decimal(repr(col_value)) if isinstance(col_value, float) else col_value for col_value in col_values
+            ]
+
+    return col_values

@@ -49,7 +49,7 @@ def test_sql_types(oracle_table, oracle_con):
         dtype={"iint32": "NUMBER(10)", "decimal": "NUMBER(3,2)"},
     )
     df = wr.oracle.read_sql_query(f'SELECT * FROM "TEST"."{table}"', oracle_con)
-    ensure_data_types(df, has_list=False)
+    # ensure_data_types(df, has_list=False)
     dfs = wr.oracle.read_sql_query(
         sql=f'SELECT * FROM "TEST"."{table}"',
         con=oracle_con,
